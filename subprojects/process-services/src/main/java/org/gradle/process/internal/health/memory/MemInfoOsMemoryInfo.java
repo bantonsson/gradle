@@ -18,6 +18,8 @@ package org.gradle.process.internal.health.memory;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.io.Files;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -27,6 +29,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class MemInfoOsMemoryInfo implements OsMemoryInfo {
+    private static final Logger LOGGER = LoggerFactory.getLogger(MemInfoOsMemoryInfo.class);
+
     // /proc/meminfo is in kB since Linux 4.0, see https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/fs/proc/task_mmu.c?id=39a8804455fb23f09157341d3ba7db6d7ae6ee76#n22
     private static final Pattern MEMINFO_LINE_PATTERN = Pattern.compile("^\\D+(\\d+) kB$");
     private static final String MEMINFO_FILE_PATH = "/proc/meminfo";
@@ -45,10 +49,12 @@ public class MemInfoOsMemoryInfo implements OsMemoryInfo {
         try {
             meminfoOutputLines = Files.readLines(new File(MEMINFO_FILE_PATH), Charset.defaultCharset());
         } catch (IOException e) {
+            LOGGER.debug("Unable to read system memory from {} due to '{}'", MEMINFO_FILE_PATH, e.getMessage());
             throw new UnsupportedOperationException("Unable to read system memory from " + MEMINFO_FILE_PATH, e);
         }
         OsMemoryStatusSnapshot memInfo = getOsSnapshotFromMemInfo(meminfoOutputLines);
         if (memInfo.getFreePhysicalMemory() < 0 || memInfo.getTotalPhysicalMemory() < 0) {
+            LOGGER.debug("Unable to read system memory from {} due to negative values", MEMINFO_FILE_PATH);
             throw new UnsupportedOperationException("Unable to read system memory from " + MEMINFO_FILE_PATH);
         }
         return memInfo;
@@ -79,6 +85,8 @@ public class MemInfoOsMemoryInfo implements OsMemoryInfo {
                 meminfo.setTotal(parseMeminfoBytes(line));
             }
         }
+
+        LOGGER.debug("Parsed {} into {}", MEMINFO_FILE_PATH, meminfo);
 
         return new OsMemoryStatusSnapshot(meminfo.getTotal(), meminfo.getAvailable());
     }
@@ -150,6 +158,19 @@ public class MemInfoOsMemoryInfo implements OsMemoryInfo {
 
         public void setAvailable(long available) {
             this.available = available;
+        }
+
+        @Override
+        public String toString() {
+            return "Meminfo{" +
+                "total=" + total +
+                ", available=" + available +
+                ", free=" + free +
+                ", buffers=" + buffers +
+                ", cached=" + cached +
+                ", reclaimable=" + reclaimable +
+                ", mapped=" + mapped +
+                '}';
         }
     }
 }
