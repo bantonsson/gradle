@@ -101,6 +101,7 @@ public class DefaultMemoryManager implements MemoryManager, Stoppable {
                 long totalPhysicalMemory = currentOsMemoryStatus.getTotalPhysicalMemory();
                 long requestedFreeMemory = getMemoryThresholdInBytes(totalPhysicalMemory) + (memoryAmountBytes > 0 ? memoryAmountBytes : 0);
                 long freeMemory = currentOsMemoryStatus.getFreePhysicalMemory();
+                LOGGER.debug("{} memory requested, {} free and {} physical", mb(requestedFreeMemory), mb(freeMemory), mb(totalPhysicalMemory));
                 long newFreeMemory = doRequestFreeMemory(requestedFreeMemory, freeMemory);
                 // If we've freed memory, invalidate the current OS memory snapshot
                 if (newFreeMemory > freeMemory) {
@@ -112,10 +113,14 @@ public class DefaultMemoryManager implements MemoryManager, Stoppable {
         }
     }
 
+    private static String mb(long bytes) {
+        return (bytes / (1024 * 1024)) + " MB";
+    }
+
     private long doRequestFreeMemory(long requestedFreeMemory, long freeMemory) {
         long toReleaseMemory = requestedFreeMemory;
         if (freeMemory < requestedFreeMemory) {
-            LOGGER.debug("{} memory requested, {} free", requestedFreeMemory, freeMemory);
+            LOGGER.debug("{} memory requested, {} free", mb(requestedFreeMemory), mb(freeMemory));
             List<MemoryHolder> memoryHolders;
             synchronized (holdersLock) {
                 memoryHolders = new ArrayList<MemoryHolder>(holders);
@@ -129,7 +134,9 @@ public class DefaultMemoryManager implements MemoryManager, Stoppable {
                 }
             }
 
-            LOGGER.debug("{} memory requested, {} released, {} free", requestedFreeMemory, requestedFreeMemory - toReleaseMemory, freeMemory);
+            LOGGER.debug("{} memory requested, {} released, {} free", mb(requestedFreeMemory), mb(requestedFreeMemory - toReleaseMemory), mb(freeMemory));
+        } else {
+            LOGGER.debug("{} memory requested, fits in {} free", mb(requestedFreeMemory), mb(freeMemory));
         }
         return freeMemory;
     }

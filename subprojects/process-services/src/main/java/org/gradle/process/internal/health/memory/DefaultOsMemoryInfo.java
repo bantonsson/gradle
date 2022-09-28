@@ -17,8 +17,11 @@
 package org.gradle.process.internal.health.memory;
 
 import org.gradle.internal.os.OperatingSystem;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class DefaultOsMemoryInfo implements OsMemoryInfo {
+    private static final Logger LOGGER = LoggerFactory.getLogger(DefaultOsMemoryInfo.class);
     private final OsMemoryInfo delegate;
 
     public DefaultOsMemoryInfo() {
@@ -30,6 +33,7 @@ public class DefaultOsMemoryInfo implements OsMemoryInfo {
         } else {
             delegate = new MBeanOsMemoryInfo();
         }
+        LOGGER.debug("Using {}", delegate.getClass().getName());
     }
 
     @Override
