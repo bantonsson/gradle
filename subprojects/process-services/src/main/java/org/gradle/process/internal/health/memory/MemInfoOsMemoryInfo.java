@@ -34,8 +34,11 @@ public class MemInfoOsMemoryInfo implements OsMemoryInfo {
     // /proc/meminfo is in kB since Linux 4.0, see https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/fs/proc/task_mmu.c?id=39a8804455fb23f09157341d3ba7db6d7ae6ee76#n22
     private static final Pattern MEMINFO_LINE_PATTERN = Pattern.compile("^\\D+(\\d+) kB$");
     private static final String MEMINFO_FILE_PATH = "/proc/meminfo";
+    private static final String CGROUP_USAGE_PATH = "/sys/fs/cgroup/memory/memory.usage_in_bytes";
+    private static final String CGROUP_LIMIT_PATH = "/sys/fs/cgroup/memory/memory.limit_in_bytes";
 
     private final Matcher meminfoMatcher;
+    private volatile boolean tryCGroup = true;
 
     public MemInfoOsMemoryInfo() {
         // Initialize Matchers once and then reset them for performance
@@ -44,6 +47,23 @@ public class MemInfoOsMemoryInfo implements OsMemoryInfo {
 
     @Override
     public synchronized OsMemoryStatus getOsSnapshot() {
+        if (tryCGroup) {
+            File cGroupUsageFile = new File(CGROUP_USAGE_PATH);
+            File cGroupLimitFile = new File(CGROUP_LIMIT_PATH);
+            try {
+                if (!cGroupUsageFile.canRead() || !cGroupLimitFile.canRead()) {
+                    tryCGroup = false;
+                } else {
+                    long cGroupUsage = Long.parseLong(Files.readLines(cGroupUsageFile, Charset.defaultCharset()).get(0));
+                    long cGroupLimit = Long.parseLong(Files.readLines(cGroupLimitFile, Charset.defaultCharset()).get(0));
+                    long free = Math.max(0, cGroupLimit - cGroupUsage);
+                    return new OsMemoryStatusSnapshot(cGroupLimit, free);
+                }
+            } catch (Exception e) {
+                tryCGroup = false;
+                LOGGER.debug("Unable to read CGroup files {} and {}", CGROUP_USAGE_PATH, CGROUP_LIMIT_PATH);
+            }
+        }
         // NOTE: meminfoMatcher is _not_ thread safe and access needs to be limited to a single thread.
         List<String> meminfoOutputLines;
         try {
